@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"github.com/HasithaErandika/proxy-maze/internal/alert"
+	"github.com/HasithaErandika/proxy-maze/internal/webhook"
 )
 
 type discordField struct {
@@ -77,18 +77,9 @@ func sendDiscord(ig Integration, event string, a *alert.Alert) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", ig.WebhookURL, bytes.NewBuffer(body))
-	if err != nil {
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err == nil {
-		resp.Body.Close()
-	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	webhook.DeliverWithRetry(ctx, client, ig.WebhookURL, body)
 }
