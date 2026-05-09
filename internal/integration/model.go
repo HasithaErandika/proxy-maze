@@ -1,6 +1,5 @@
 package integration
 
-// Integration represents a registered external integration.
 type Integration struct {
 	Type       string   `json:"type"`
 	WebhookURL string   `json:"webhook_url"`
@@ -8,7 +7,6 @@ type Integration struct {
 	Events     []string `json:"events"`
 }
 
-// IntegrationReq represents the incoming payload for POST /integrations
 type IntegrationReq struct {
 	Type       string   `json:"type"`
 	WebhookURL string   `json:"webhook_url"`

@@ -12,7 +12,6 @@ type ConfigReq struct {
 	RequestTimeoutMs     int `json:"request_timeout_ms"`
 }
 
-// ConfigHandler handles POST and GET for /config
 func ConfigHandler(cfgStore *config.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -29,11 +28,8 @@ func ConfigHandler(cfgStore *config.Store) http.HandlerFunc {
 		if r.Method == http.MethodPost {
 			var req ConfigReq
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				// Ignore parsing errors of unknown fields as per prompt: "Accept silently"
-				// but if JSON is malformed, we send 400.
 			}
 
-			// Validate or use defaults
 			if req.CheckIntervalSeconds <= 0 {
 				req.CheckIntervalSeconds = 30
 			}

@@ -11,7 +11,6 @@ type WebhookReq struct {
 	URL string `json:"url"`
 }
 
-// WebhooksHandler handles POST /webhooks
 func WebhooksHandler(registry *webhook.Registry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -21,7 +20,6 @@ func WebhooksHandler(registry *webhook.Registry) http.HandlerFunc {
 
 		var req WebhookReq
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			// Accept silently, ignore malformed formats for brevity
 		}
 
 		if req.URL == "" {

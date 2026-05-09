@@ -12,7 +12,6 @@ import (
 	"github.com/HasithaErandika/proxy-maze/internal/webhook"
 )
 
-// NewRouter registers all routes and returns a ServeMux
 func NewRouter(
 	cfgStore *config.Store,
 	pool *proxy.Pool,

@@ -36,13 +36,13 @@ type discordPayload struct {
 }
 
 func sendDiscord(ig Integration, event string, a *alert.Alert) {
-	color := 16711680 // red for fired
-	title := "🚨 Proxy Pool Alert Fired"
+	color := 16711680 
+	title := "Proxy Pool Alert Fired"
 	desc := "Proxy pool failure rate has exceeded the threshold."
 
 	if event == "alert.resolved" {
-		color = 43520 // green for resolved
-		title = "✅ Proxy Pool Alert Resolved"
+		color = 43520 
+		title = "Proxy Pool Alert Resolved"
 		desc = "Proxy pool failure rate is back below the threshold."
 	}
 

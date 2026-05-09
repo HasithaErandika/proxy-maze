@@ -7,7 +7,6 @@ import (
 	"github.com/HasithaErandika/proxy-maze/internal/proxy"
 )
 
-// Metrics holds the atomic counters and dependencies to derive dynamic metrics.
 type Metrics struct {
 	TotalChecks       int64
 	WebhookDeliveries int64
@@ -16,7 +15,6 @@ type Metrics struct {
 	alertManager *alert.Manager
 }
 
-// NewMetrics creates a new metrics tracker.
 func NewMetrics(poolManager *proxy.Pool, alertManager *alert.Manager) *Metrics {
 	return &Metrics{
 		TotalChecks:       0,
@@ -26,17 +24,14 @@ func NewMetrics(poolManager *proxy.Pool, alertManager *alert.Manager) *Metrics {
 	}
 }
 
-// IncrementTotalChecks atomically increments the total checks counter.
 func (m *Metrics) IncrementTotalChecks() {
 	atomic.AddInt64(&m.TotalChecks, 1)
 }
 
-// IncrementWebhookDeliveries atomically increments the successful webhook deliveries counter.
 func (m *Metrics) IncrementWebhookDeliveries() {
 	atomic.AddInt64(&m.WebhookDeliveries, 1)
 }
 
-// GetSnapshot returns the current metrics values.
 func (m *Metrics) GetSnapshot() map[string]interface{} {
 	poolSize := 0
 	if m.poolManager != nil {

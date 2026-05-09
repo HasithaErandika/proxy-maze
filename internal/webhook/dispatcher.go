@@ -8,19 +8,16 @@ import (
 	"time"
 )
 
-// MetricsTracker interface to avoid cyclic dependency with internal/metrics
 type MetricsTracker interface {
 	IncrementWebhookDeliveries()
 }
 
-// Dispatcher handles the delivery of webhook payloads.
 type Dispatcher struct {
 	registry *Registry
 	client   *http.Client
 	metrics  MetricsTracker
 }
 
-// NewDispatcher creates a new webhook dispatcher.
 func NewDispatcher(registry *Registry, metrics MetricsTracker) *Dispatcher {
 	return &Dispatcher{
 		registry: registry,
@@ -31,17 +28,14 @@ func NewDispatcher(registry *Registry, metrics MetricsTracker) *Dispatcher {
 	}
 }
 
-// SetMetrics updates the metrics tracker.
 func (d *Dispatcher) SetMetrics(metrics MetricsTracker) {
 	d.metrics = metrics
 }
 
-// SendFired dispatches the alert.fired event to all webhooks.
 func (d *Dispatcher) SendFired(payload interface{}) {
 	d.dispatchAll(payload)
 }
 
-// SendResolved dispatches the alert.resolved event to all webhooks.
 func (d *Dispatcher) SendResolved(payload interface{}) {
 	d.dispatchAll(payload)
 }
@@ -82,7 +76,6 @@ func (d *Dispatcher) deliverWithRetry(url string, body []byte) {
 
 		resp, err := d.client.Do(req)
 		if err != nil {
-			// Network error, retry
 			continue
 		}
 		
@@ -90,16 +83,13 @@ func (d *Dispatcher) deliverWithRetry(url string, body []byte) {
 		resp.Body.Close()
 
 		if status >= 200 && status < 300 {
-			// Success
 			if d.metrics != nil {
 				d.metrics.IncrementWebhookDeliveries()
 			}
 			return
 		} else if status == 500 || status == 502 || status == 503 || status == 504 {
-			// Retryable errors
 			continue
 		} else {
-			// Non-retryable error (e.g. 400, 401, 404)
 			return
 		}
 	}

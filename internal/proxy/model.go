@@ -2,14 +2,12 @@ package proxy
 
 import "time"
 
-// Status constants
 const (
 	StatusPending = "pending"
 	StatusUp      = "up"
 	StatusDown    = "down"
 )
 
-// Proxy represents a tracked proxy server.
 type Proxy struct {
 	ID                  string        `json:"id"`
 	URL                 string        `json:"url"`
@@ -21,7 +19,6 @@ type Proxy struct {
 	History             []CheckRecord `json:"history"` // capped at 100 entries
 }
 
-// CheckRecord represents a single health check probe result.
 type CheckRecord struct {
 	CheckedAt time.Time `json:"checked_at"`
 	Status    string    `json:"status"`

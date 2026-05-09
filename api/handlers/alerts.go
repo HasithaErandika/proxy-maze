@@ -7,7 +7,6 @@ import (
 	"github.com/HasithaErandika/proxy-maze/internal/alert"
 )
 
-// AlertsHandler handles GET /alerts
 func AlertsHandler(manager *alert.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

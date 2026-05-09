@@ -7,7 +7,6 @@ import (
 	"github.com/HasithaErandika/proxy-maze/internal/integration"
 )
 
-// IntegrationsHandler handles POST /integrations
 func IntegrationsHandler(registry *integration.Registry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -17,7 +16,6 @@ func IntegrationsHandler(registry *integration.Registry) http.HandlerFunc {
 
 		var req integration.IntegrationReq
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			// Ignore parse errors for unknown fields
 		}
 
 		if req.Type == "" || req.WebhookURL == "" {

@@ -8,7 +8,6 @@ import (
 	"github.com/HasithaErandika/proxy-maze/internal/proxy"
 )
 
-// ProxyHandler handles GET /proxies/{id} and GET /proxies/{id}/history
 func ProxyHandler(pool *proxy.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -16,7 +15,6 @@ func ProxyHandler(pool *proxy.Pool) http.HandlerFunc {
 			return
 		}
 
-		// Parse ID and potential "history" suffix from path
 		path := strings.TrimPrefix(r.URL.Path, "/proxies/")
 		parts := strings.Split(path, "/")
 

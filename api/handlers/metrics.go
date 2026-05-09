@@ -7,7 +7,6 @@ import (
 	"github.com/HasithaErandika/proxy-maze/internal/metrics"
 )
 
-// MetricsHandler handles GET /metrics
 func MetricsHandler(metricsTracker *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
