@@ -78,7 +78,18 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 
 		// Dispatch async
 		if m.dispatcher != nil {
-			go m.dispatcher.SendFired(newAlert)
+			payload := map[string]interface{}{
+				"event":            "alert.fired",
+				"alert_id":         newAlert.AlertID,
+				"fired_at":         newAlert.FiredAt.Format(time.RFC3339),
+				"failure_rate":     newAlert.FailureRate,
+				"total_proxies":    newAlert.TotalProxies,
+				"failed_proxies":   newAlert.FailedProxies,
+				"failed_proxy_ids": newAlert.FailedProxyIDs,
+				"threshold":        newAlert.Threshold,
+				"message":          newAlert.Message,
+			}
+			go m.dispatcher.SendFired(payload)
 		}
 		if m.igRegistry != nil {
 			go m.igRegistry.DispatchAlert("alert.fired", newAlert, m.dispatcher)
@@ -106,7 +117,16 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 
 		// Dispatch async
 		if m.dispatcher != nil {
-			go m.dispatcher.SendResolved(resolvedAlert)
+			resolvedAtStr := ""
+			if resolvedAlert.ResolvedAt != nil {
+				resolvedAtStr = resolvedAlert.ResolvedAt.Format(time.RFC3339)
+			}
+			payload := map[string]interface{}{
+				"event":       "alert.resolved",
+				"alert_id":    resolvedAlert.AlertID,
+				"resolved_at": resolvedAtStr,
+			}
+			go m.dispatcher.SendResolved(payload)
 		}
 		if m.igRegistry != nil {
 			go m.igRegistry.DispatchAlert("alert.resolved", resolvedAlert, m.dispatcher)

@@ -37,21 +37,16 @@ func (d *Dispatcher) SetMetrics(metrics MetricsTracker) {
 }
 
 // SendFired dispatches the alert.fired event to all webhooks.
-func (d *Dispatcher) SendFired(alert interface{}) {
-	d.dispatchAll("alert.fired", alert)
+func (d *Dispatcher) SendFired(payload interface{}) {
+	d.dispatchAll(payload)
 }
 
 // SendResolved dispatches the alert.resolved event to all webhooks.
-func (d *Dispatcher) SendResolved(alert interface{}) {
-	d.dispatchAll("alert.resolved", alert)
+func (d *Dispatcher) SendResolved(payload interface{}) {
+	d.dispatchAll(payload)
 }
 
-func (d *Dispatcher) dispatchAll(event string, alert interface{}) {
-	payload := Payload{
-		Event: event,
-		Alert: alert,
-	}
-
+func (d *Dispatcher) dispatchAll(payload interface{}) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return
