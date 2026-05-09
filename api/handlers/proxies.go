@@ -45,9 +45,10 @@ func ProxiesHandler(pool *proxy.Pool) http.HandlerFunc {
 			down := 0
 
 			for _, p := range all {
-				if p.Status == proxy.StatusUp {
+				switch p.Status {
+				case proxy.StatusUp:
 					up++
-				} else if p.Status == proxy.StatusDown {
+				case proxy.StatusDown:
 					down++
 				}
 			}

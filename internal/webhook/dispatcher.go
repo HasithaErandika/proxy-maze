@@ -22,7 +22,7 @@ func NewDispatcher(registry *Registry, metrics MetricsTracker) *Dispatcher {
 	return &Dispatcher{
 		registry: registry,
 		client: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 5 * time.Second,
 		},
 		metrics: metrics,
 	}
@@ -53,9 +53,16 @@ func (d *Dispatcher) dispatchAll(payload interface{}) {
 }
 
 func (d *Dispatcher) deliverWithRetry(url string, body []byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
 	defer cancel()
 
+	success := DeliverWithRetry(ctx, d.client, url, body)
+	if success && d.metrics != nil {
+		d.metrics.IncrementWebhookDeliveries()
+	}
+}
+
+func DeliverWithRetry(ctx context.Context, client *http.Client, url string, body []byte) bool {
 	backoff := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second}
 	maxRetries := len(backoff)
 
@@ -64,17 +71,17 @@ func (d *Dispatcher) deliverWithRetry(url string, body []byte) {
 			select {
 			case <-time.After(backoff[attempt-1]):
 			case <-ctx.Done():
-				return
+				return false
 			}
 		}
 
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 		if err != nil {
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
 
-		resp, err := d.client.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			continue
 		}
@@ -83,14 +90,12 @@ func (d *Dispatcher) deliverWithRetry(url string, body []byte) {
 		resp.Body.Close()
 
 		if status >= 200 && status < 300 {
-			if d.metrics != nil {
-				d.metrics.IncrementWebhookDeliveries()
-			}
-			return
+			return true
 		} else if status == 500 || status == 502 || status == 503 || status == 504 {
 			continue
 		} else {
-			return
+			return false
 		}
 	}
+	return false
 }

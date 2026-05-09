@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/HasithaErandika/proxy-maze/internal/alert"
@@ -58,26 +59,48 @@ func (c *Checker) runLoop(ctx context.Context, ticker *time.Ticker) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.executeChecks()
+			c.executeChecks(ctx)
 		}
 	}
 }
 
-func (c *Checker) executeChecks() {
+func (c *Checker) executeChecks(ctx context.Context) {
 	proxies := c.pool.GetAll()
 	if len(proxies) == 0 {
-		c.alertM.Evaluate(0, 0, nil)
-		return
+		return 
+	}
+
+	type result struct {
+		prx    *Proxy
+		status string
+		now    time.Time
+	}
+	results := make([]result, len(proxies))
+
+	var wg sync.WaitGroup
+	for i, prx := range proxies {
+		wg.Add(1)
+		go func(i int, p *Proxy) {
+			defer wg.Done()
+			status := c.checkProxy(ctx, p.URL)
+			results[i] = result{p, status, time.Now().UTC()}
+		}(i, prx)
+	}
+	wg.Wait()
+
+	if ctx.Err() != nil {
+		return 
 	}
 
 	downCount := 0
 	var failedIDs []string
 
-	for _, prx := range proxies {
-		status := c.checkProxy(prx.URL)
-		now := time.Now().UTC()
+	c.pool.mu.Lock()
+	for _, res := range results {
+		prx := res.prx
+		status := res.status
+		now := res.now
 
-		c.pool.mu.Lock()
 		prx.LastCheckedAt = &now
 		prx.TotalChecks++
 		if c.metrics != nil {
@@ -118,14 +141,14 @@ func (c *Checker) executeChecks() {
 			downCount++
 			failedIDs = append(failedIDs, prx.ID)
 		}
-		c.pool.mu.Unlock()
 	}
+	c.pool.mu.Unlock()
 
 	c.alertM.Evaluate(len(proxies), downCount, failedIDs)
 }
 
-func (c *Checker) checkProxy(urlStr string) string {
-	req, err := http.NewRequest("GET", urlStr, nil)
+func (c *Checker) checkProxy(ctx context.Context, urlStr string) string {
+	req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
 	if err != nil {
 		return StatusDown
 	}

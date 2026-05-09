@@ -38,6 +38,10 @@ func (m *Manager) SetIntegrationRegistry(ig IntegrationDispatcher) {
 }
 
 func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []string) {
+	if totalProxies == 0 {
+		return
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

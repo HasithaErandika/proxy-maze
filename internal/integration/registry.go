@@ -40,9 +40,10 @@ func (r *Registry) DispatchAlert(event string, a *alert.Alert, dispatcher *webho
 			continue
 		}
 
-		if ig.Type == "slack" {
+		switch ig.Type {
+		case "slack":
 			go sendSlack(ig, event, a)
-		} else if ig.Type == "discord" {
+		case "discord":
 			go sendDiscord(ig, event, a)
 		}
 	}
