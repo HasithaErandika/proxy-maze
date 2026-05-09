@@ -23,3 +23,18 @@ type CheckRecord struct {
 	CheckedAt time.Time `json:"checked_at"`
 	Status    string    `json:"status"`
 }
+
+func (p *Proxy) Clone() *Proxy {
+	clone := *p
+	if p.LastCheckedAt != nil {
+		t := *p.LastCheckedAt
+		clone.LastCheckedAt = &t
+	}
+	if p.History != nil {
+		clone.History = make([]CheckRecord, len(p.History))
+		copy(clone.History, p.History)
+	} else {
+		clone.History = make([]CheckRecord, 0)
+	}
+	return &clone
+}

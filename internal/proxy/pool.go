@@ -39,7 +39,7 @@ func (p *Pool) Add(urls []string, replace bool) []*Proxy {
 				History:             make([]CheckRecord, 0),
 			}
 			p.proxies[id] = prx
-			added = append(added, prx)
+			added = append(added, prx.Clone())
 		}
 	}
 	return added
@@ -48,7 +48,10 @@ func (p *Pool) Add(urls []string, replace bool) []*Proxy {
 func (p *Pool) Get(id string) *Proxy {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.proxies[id]
+	if prx, ok := p.proxies[id]; ok {
+		return prx.Clone()
+	}
+	return nil
 }
 
 func (p *Pool) GetAll() []*Proxy {
@@ -57,7 +60,7 @@ func (p *Pool) GetAll() []*Proxy {
 
 	all := make([]*Proxy, 0, len(p.proxies))
 	for _, prx := range p.proxies {
-		all = append(all, prx)
+		all = append(all, prx.Clone())
 	}
 	return all
 }
