@@ -15,10 +15,15 @@ func IntegrationsHandler(registry *integration.Registry) http.HandlerFunc {
 			return
 		}
 
-		var req integration.IntegrationReq
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			// Ignore parse errors for unknown fields
+		// First validate JSON structure
+		var raw json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, `{"error":"malformed JSON"}`, http.StatusBadRequest)
+			return
 		}
+
+		var req integration.IntegrationReq
+		json.Unmarshal(raw, &req)
 
 		if req.Type == "" || req.WebhookURL == "" {
 			http.Error(w, "Missing type or webhook_url", http.StatusBadRequest)

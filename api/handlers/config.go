@@ -27,11 +27,15 @@ func ConfigHandler(cfgStore *config.Store) http.HandlerFunc {
 		}
 
 		if r.Method == http.MethodPost {
-			var req ConfigReq
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				// Ignore parsing errors of unknown fields as per prompt: "Accept silently"
-				// but if JSON is malformed, we send 400.
+			var raw json.RawMessage
+			if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+				http.Error(w, `{"error":"malformed JSON"}`, http.StatusBadRequest)
+				return
 			}
+
+			var req ConfigReq
+			// Unmarshal from raw — this will silently ignore unknown fields
+			json.Unmarshal(raw, &req)
 
 			// Validate or use defaults
 			if req.CheckIntervalSeconds <= 0 {

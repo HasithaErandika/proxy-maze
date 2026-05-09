@@ -17,10 +17,14 @@ func ProxiesHandler(pool *proxy.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
-			var req ProxiesReq
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				// Accept unknown fields silently, but check for valid JSON format
+			var raw json.RawMessage
+			if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+				http.Error(w, `{"error":"malformed JSON"}`, http.StatusBadRequest)
+				return
 			}
+
+			var req ProxiesReq
+			json.Unmarshal(raw, &req)
 
 			added := pool.Add(req.Proxies, req.Replace)
 
@@ -47,12 +51,33 @@ func ProxiesHandler(pool *proxy.Pool) http.HandlerFunc {
 			up := 0
 			down := 0
 
+			type proxyView struct {
+				ID                  string  `json:"id"`
+				URL                 string  `json:"url"`
+				Status              string  `json:"status"`
+				LastCheckedAt       *string `json:"last_checked_at"`
+				ConsecutiveFailures int     `json:"consecutive_failures"`
+			}
+
+			proxyViews := make([]proxyView, 0, total)
 			for _, p := range all {
 				if p.Status == proxy.StatusUp {
 					up++
 				} else if p.Status == proxy.StatusDown {
 					down++
 				}
+				var lastChecked *string
+				if p.LastCheckedAt != nil {
+					s := p.LastCheckedAt.UTC().Format("2006-01-02T15:04:05Z")
+					lastChecked = &s
+				}
+				proxyViews = append(proxyViews, proxyView{
+					ID:                  p.ID,
+					URL:                 p.URL,
+					Status:              p.Status,
+					LastCheckedAt:       lastChecked,
+					ConsecutiveFailures: p.ConsecutiveFailures,
+				})
 			}
 
 			failureRate := 0.0
@@ -66,7 +91,7 @@ func ProxiesHandler(pool *proxy.Pool) http.HandlerFunc {
 				"up":           up,
 				"down":         down,
 				"failure_rate": failureRate,
-				"proxies":      all,
+				"proxies":      proxyViews,
 			})
 
 		case http.MethodDelete:

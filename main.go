@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -31,27 +32,26 @@ func main() {
 	// Webhook dispatcher needs metrics tracking
 	dispatcher := webhook.NewDispatcher(whRegistry, metricsTracker)
 
-	// Add integrations to dispatcher via wrapping to avoid circular dependencies
-	// Actually, wait, let's inject integration registry into alert manager or just use a wrapper.
-	// For simplicity, we just inject dispatcher into alert manager, and we will update manager to also trigger integrations.
 	alertManager := alert.NewManager(dispatcher)
-	alertManager.SetIntegrationRegistry(igRegistry) // We'll add this method to alertManager
+	alertManager.SetIntegrationRegistry(igRegistry)
 	
 	// Complete metrics setup
 	metricsTracker = metrics.NewMetrics(pool, alertManager)
-	dispatcher.SetMetrics(metricsTracker) // update dispatcher with real metrics
+	dispatcher.SetMetrics(metricsTracker)
 
 	checker := proxy.NewChecker(pool, cfgStore, alertManager, metricsTracker)
 
-	// Context for graceful shutdown and background loop cancellation
+	// Mutex to protect cancel and context variables
+	var mu sync.Mutex
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	// Link config store to checker loop
+	// Link config store to checker loop restart
 	restartLoop := func() {
+		mu.Lock()
 		cancel()
 		ctx, cancel = context.WithCancel(context.Background())
 		go checker.Start(ctx)
+		mu.Unlock()
 	}
 	cfgStore.SetTickerCancel(restartLoop)
 
@@ -84,6 +84,9 @@ func main() {
 
 	<-stop
 	log.Println("Shutting down gracefully...")
+	mu.Lock()
+	cancel()
+	mu.Unlock()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()

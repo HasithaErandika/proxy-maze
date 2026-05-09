@@ -10,6 +10,8 @@ import (
 	"github.com/HasithaErandika/proxy-maze/internal/webhook"
 )
 
+const isoFormat = "2006-01-02T15:04:05Z"
+
 // Manager handles the state machine for proxy alerts.
 type Manager struct {
 	mu           sync.RWMutex
@@ -61,6 +63,10 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 		}
 		alertID := "alert-" + idStr
 
+		if failedProxyIDs == nil {
+			failedProxyIDs = []string{}
+		}
+
 		newAlert := &Alert{
 			AlertID:        alertID,
 			Status:         StatusActive,
@@ -70,7 +76,7 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 			FailedProxyIDs: failedProxyIDs,
 			Threshold:      m.Threshold,
 			FiredAt:        time.Now().UTC(),
-			Message:        fmt.Sprintf("Proxy pool failure rate exceeded threshold (%.2f%%)", failureRate*100),
+			Message:        fmt.Sprintf("Proxy pool failure rate exceeded threshold"),
 		}
 
 		m.activeAlert = newAlert
@@ -81,7 +87,7 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 			payload := map[string]interface{}{
 				"event":            "alert.fired",
 				"alert_id":         newAlert.AlertID,
-				"fired_at":         newAlert.FiredAt.Format(time.RFC3339),
+				"fired_at":         newAlert.FiredAt.UTC().Format(isoFormat),
 				"failure_rate":     newAlert.FailureRate,
 				"total_proxies":    newAlert.TotalProxies,
 				"failed_proxies":   newAlert.FailedProxies,
@@ -97,6 +103,9 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 
 	} else if isBreaching && m.activeAlert != nil {
 		// Update active alert with latest stats (optional but keeps it consistent)
+		if failedProxyIDs == nil {
+			failedProxyIDs = []string{}
+		}
 		m.activeAlert.FailureRate = failureRate
 		m.activeAlert.TotalProxies = totalProxies
 		m.activeAlert.FailedProxies = failedProxies
@@ -110,6 +119,9 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 		m.activeAlert.FailureRate = failureRate
 		m.activeAlert.TotalProxies = totalProxies
 		m.activeAlert.FailedProxies = failedProxies
+		if failedProxyIDs == nil {
+			failedProxyIDs = []string{}
+		}
 		m.activeAlert.FailedProxyIDs = failedProxyIDs
 		
 		resolvedAlert := m.activeAlert
@@ -119,7 +131,7 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 		if m.dispatcher != nil {
 			resolvedAtStr := ""
 			if resolvedAlert.ResolvedAt != nil {
-				resolvedAtStr = resolvedAlert.ResolvedAt.Format(time.RFC3339)
+				resolvedAtStr = resolvedAlert.ResolvedAt.UTC().Format(isoFormat)
 			}
 			payload := map[string]interface{}{
 				"event":       "alert.resolved",

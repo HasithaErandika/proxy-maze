@@ -19,10 +19,15 @@ func WebhooksHandler(registry *webhook.Registry) http.HandlerFunc {
 			return
 		}
 
-		var req WebhookReq
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			// Accept silently, ignore malformed formats for brevity
+		// First validate JSON structure, then extract known fields
+		var raw json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, `{"error":"malformed JSON"}`, http.StatusBadRequest)
+			return
 		}
+
+		var req WebhookReq
+		json.Unmarshal(raw, &req)
 
 		if req.URL == "" {
 			http.Error(w, "Missing URL", http.StatusBadRequest)

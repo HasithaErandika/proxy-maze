@@ -2,7 +2,9 @@ package proxy
 
 import (
 	"context"
+	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/HasithaErandika/proxy-maze/internal/alert"
@@ -34,34 +36,21 @@ func NewChecker(pool *Pool, cfg *config.Store, alertM *alert.Manager, metrics Me
 	}
 }
 
-// Start begins the background check loop. It will restart if ctx is cancelled.
+// Start begins the background check loop. It runs until ctx is cancelled.
 func (c *Checker) Start(ctx context.Context) {
-	for {
-		intervalSecs, timeoutMs := c.config.Get()
-		interval := time.Duration(intervalSecs) * time.Second
+	intervalSecs, timeoutMs := c.config.Get()
+	interval := time.Duration(intervalSecs) * time.Second
+	c.client.Timeout = time.Duration(timeoutMs) * time.Millisecond
 
-		c.client.Timeout = time.Duration(timeoutMs) * time.Millisecond
-
-		ticker := time.NewTicker(interval)
-
-		select {
-		case <-ctx.Done():
-			ticker.Stop()
-			return // graceful shutdown
-		default:
-			c.runLoop(ctx, ticker)
-		}
-	}
-}
-
-func (c *Checker) runLoop(ctx context.Context, ticker *time.Ticker) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// Run an initial check immediately
+	c.executeChecks()
+
 	for {
 		select {
 		case <-ctx.Done():
-			// The config was updated (or app is shutting down)
-			// Context canceled, break inner loop to pick up new config
 			return
 		case <-ticker.C:
 			c.executeChecks()
@@ -76,11 +65,36 @@ func (c *Checker) executeChecks() {
 		return
 	}
 
+	// Update timeout from config before each round
+	_, timeoutMs := c.config.Get()
+	c.client.Timeout = time.Duration(timeoutMs) * time.Millisecond
+
 	downCount := 0
 	var failedIDs []string
 
-	for _, prx := range proxies {
-		status := c.checkProxy(prx.URL)
+	// Check all proxies concurrently with a WaitGroup
+	type result struct {
+		prx    *Proxy
+		status string
+	}
+
+	results := make([]result, len(proxies))
+	var wg sync.WaitGroup
+
+	for i, prx := range proxies {
+		wg.Add(1)
+		go func(idx int, p *Proxy) {
+			defer wg.Done()
+			status := c.checkProxy(p.URL)
+			results[idx] = result{prx: p, status: status}
+		}(i, prx)
+	}
+	wg.Wait()
+
+	// Now update all proxies under lock
+	for _, res := range results {
+		prx := res.prx
+		status := res.status
 		now := time.Now().UTC()
 
 		c.pool.mu.Lock()
@@ -98,21 +112,7 @@ func (c *Checker) executeChecks() {
 			prx.ConsecutiveFailures++
 		}
 
-		// Calculate Uptime
-		upChecks := 0
-		if prx.TotalChecks > 0 {
-			for _, rec := range prx.History {
-				if rec.Status == StatusUp {
-					upChecks++
-				}
-			}
-			if status == StatusUp {
-				upChecks++
-			}
-			prx.UptimePercentage = float64(upChecks) / float64(prx.TotalChecks)
-		}
-
-		// Append History
+		// Append History record
 		record := CheckRecord{
 			CheckedAt: now,
 			Status:    prx.Status,
@@ -120,6 +120,17 @@ func (c *Checker) executeChecks() {
 		prx.History = append(prx.History, record)
 		if len(prx.History) > 100 {
 			prx.History = prx.History[1:] // keep last 100
+		}
+
+		// Recalculate uptime from full history
+		upChecks := 0
+		for _, rec := range prx.History {
+			if rec.Status == StatusUp {
+				upChecks++
+			}
+		}
+		if prx.TotalChecks > 0 {
+			prx.UptimePercentage = float64(upChecks) / float64(prx.TotalChecks)
 		}
 
 		if prx.Status == StatusDown {
@@ -130,6 +141,7 @@ func (c *Checker) executeChecks() {
 	}
 
 	c.alertM.Evaluate(len(proxies), downCount, failedIDs)
+	log.Printf("[Checker] Checked %d proxies: %d down, failure_rate=%.2f", len(proxies), downCount, float64(downCount)/float64(len(proxies)))
 }
 
 func (c *Checker) checkProxy(urlStr string) string {

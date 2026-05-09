@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
@@ -30,15 +32,61 @@ func ProxyHandler(pool *proxy.Pool) http.HandlerFunc {
 
 		prx := pool.Get(id)
 		if prx == nil {
-			http.Error(w, "Not Found", http.StatusNotFound)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Not Found"})
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if isHistory {
-			json.NewEncoder(w).Encode(prx.History)
+			// Return array of {checked_at, status}
+			type historyEntry struct {
+				CheckedAt string `json:"checked_at"`
+				Status    string `json:"status"`
+			}
+			entries := make([]historyEntry, 0, len(prx.History))
+			for _, h := range prx.History {
+				entries = append(entries, historyEntry{
+					CheckedAt: h.CheckedAt.UTC().Format("2006-01-02T15:04:05Z"),
+					Status:    h.Status,
+				})
+			}
+			json.NewEncoder(w).Encode(entries)
 		} else {
-			json.NewEncoder(w).Encode(prx)
+			// Build the full dossier response with explicit timestamp formatting
+			type historyEntry struct {
+				CheckedAt string `json:"checked_at"`
+				Status    string `json:"status"`
+			}
+			histEntries := make([]historyEntry, 0, len(prx.History))
+			for _, h := range prx.History {
+				histEntries = append(histEntries, historyEntry{
+					CheckedAt: h.CheckedAt.UTC().Format("2006-01-02T15:04:05Z"),
+					Status:    h.Status,
+				})
+			}
+
+			var lastChecked *string
+			if prx.LastCheckedAt != nil {
+				s := prx.LastCheckedAt.UTC().Format("2006-01-02T15:04:05Z")
+				lastChecked = &s
+			}
+
+			// uptime_percentage should be 0-100 range, rounded to 1 decimal
+			uptimePct := math.Round(prx.UptimePercentage*1000) / 10
+
+			resp := map[string]interface{}{
+				"id":                    prx.ID,
+				"url":                   prx.URL,
+				"status":                prx.Status,
+				"last_checked_at":       lastChecked,
+				"consecutive_failures":  prx.ConsecutiveFailures,
+				"total_checks":          prx.TotalChecks,
+				"uptime_percentage":     fmt.Sprintf("%.1f", uptimePct),
+				"history":              histEntries,
+			}
+			json.NewEncoder(w).Encode(resp)
 		}
 	}
 }
