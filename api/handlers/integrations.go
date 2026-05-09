@@ -34,6 +34,8 @@ func IntegrationsHandler(registry *integration.Registry) http.HandlerFunc {
 
 		registry.Add(ig)
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(ig)
 	}
 }
