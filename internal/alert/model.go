@@ -2,13 +2,11 @@ package alert
 
 import "time"
 
-// Alert status constants
 const (
 	StatusActive   = "active"
 	StatusResolved = "resolved"
 )
 
-// Alert represents an active or resolved threshold breach.
 type Alert struct {
 	AlertID        string     `json:"alert_id"`
 	Status         string     `json:"status"`

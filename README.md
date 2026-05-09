@@ -1,4 +1,5 @@
 # ProxyMaze'26
+
 **Real-Time Proxy Intelligence — Torch Labs Engineering Challenge**
 
 This is a production-ready, asynchronous proxy monitoring system built in Go. It tracks proxy health in real-time, features a strict alert lifecycle with automated webhooks, and directly integrates with Slack and Discord.
@@ -6,15 +7,18 @@ This is a production-ready, asynchronous proxy monitoring system built in Go. It
 ## Quick Start
 
 Run the application locally:
+
 ```bash
 go mod tidy
 go run main.go
 ```
+
 By default, the API will be available at `http://localhost:8080`.
 
 ## Docker
 
 To run the application via Docker:
+
 ```bash
 docker compose up --build
 ```
@@ -49,18 +53,17 @@ ProxyMaze features an asynchronous architecture built around Go's concurrency mo
 
 ## API Endpoints
 
-| Method | Path | Description |
-| :--- | :--- | :--- |
-| `GET` | `/health` | Application health check |
-| `POST` | `/config` | Update background checker config |
-| `GET` | `/config` | View background checker config |
-| `POST` | `/proxies` | Add or replace proxy URLs in the pool |
-| `GET` | `/proxies` | View all proxies and pool failure rate |
-| `GET` | `/proxies/{id}` | View details for a single proxy |
-| `GET` | `/proxies/{id}/history` | View the last 100 check records for a proxy |
-| `DELETE`| `/proxies` | Clear the proxy pool completely |
-| `GET` | `/alerts` | View the complete alert history archive |
-| `POST` | `/webhooks` | Register a new webhook receiver |
-| `POST` | `/integrations` | Register a new Slack or Discord integration |
-| `GET` | `/metrics` | View system metrics (total checks, deliveries) |
-
+| Method   | Path                    | Description                                    |
+| :------- | :---------------------- | :--------------------------------------------- |
+| `GET`    | `/health`               | Application health check                       |
+| `POST`   | `/config`               | Update background checker config               |
+| `GET`    | `/config`               | View background checker config                 |
+| `POST`   | `/proxies`              | Add or replace proxy URLs in the pool          |
+| `GET`    | `/proxies`              | View all proxies and pool failure rate         |
+| `GET`    | `/proxies/{id}`         | View details for a single proxy                |
+| `GET`    | `/proxies/{id}/history` | View the last 100 check records for a proxy    |
+| `DELETE` | `/proxies`              | Clear the proxy pool completely                |
+| `GET`    | `/alerts`               | View the complete alert history archive        |
+| `POST`   | `/webhooks`             | Register a new webhook receiver                |
+| `POST`   | `/integrations`         | Register a new Slack or Discord integration    |
+| `GET`    | `/metrics`              | View system metrics (total checks, deliveries) |

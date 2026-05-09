@@ -37,9 +37,9 @@ func sendSlack(ig Integration, event string, a *alert.Alert) {
 		color = "#00AA00"
 	}
 
-	title := "🚨 ProxyMaze Alert: Proxy pool failure rate exceeded threshold"
+	title := "ProxyMaze Alert: Proxy pool failure rate exceeded threshold"
 	if event == "alert.resolved" {
-		title = "✅ ProxyMaze Alert: Proxy pool failure rate resolved"
+		title = "ProxyMaze Alert: Proxy pool failure rate resolved"
 	}
 
 	payload := slackPayload{

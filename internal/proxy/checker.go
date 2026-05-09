@@ -9,12 +9,10 @@ import (
 	"github.com/HasithaErandika/proxy-maze/internal/config"
 )
 
-// MetricsTracker interface to avoid cyclic dependency
 type MetricsTracker interface {
 	IncrementTotalChecks()
 }
 
-// Checker handles the background polling of proxies.
 type Checker struct {
 	pool    *Pool
 	config  *config.Store
@@ -23,7 +21,6 @@ type Checker struct {
 	client  *http.Client
 }
 
-// NewChecker creates a new background checker.
 func NewChecker(pool *Pool, cfg *config.Store, alertM *alert.Manager, metrics MetricsTracker) *Checker {
 	return &Checker{
 		pool:    pool,
@@ -34,7 +31,6 @@ func NewChecker(pool *Pool, cfg *config.Store, alertM *alert.Manager, metrics Me
 	}
 }
 
-// Start begins the background check loop. It will restart if ctx is cancelled.
 func (c *Checker) Start(ctx context.Context) {
 	for {
 		intervalSecs, timeoutMs := c.config.Get()
@@ -47,7 +43,7 @@ func (c *Checker) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			ticker.Stop()
-			return // graceful shutdown
+			return
 		default:
 			c.runLoop(ctx, ticker)
 		}
@@ -60,8 +56,6 @@ func (c *Checker) runLoop(ctx context.Context, ticker *time.Ticker) {
 	for {
 		select {
 		case <-ctx.Done():
-			// The config was updated (or app is shutting down)
-			// Context canceled, break inner loop to pick up new config
 			return
 		case <-ticker.C:
 			c.executeChecks()
@@ -98,7 +92,6 @@ func (c *Checker) executeChecks() {
 			prx.ConsecutiveFailures++
 		}
 
-		// Calculate Uptime
 		upChecks := 0
 		if prx.TotalChecks > 0 {
 			for _, rec := range prx.History {
@@ -112,14 +105,13 @@ func (c *Checker) executeChecks() {
 			prx.UptimePercentage = float64(upChecks) / float64(prx.TotalChecks)
 		}
 
-		// Append History
 		record := CheckRecord{
 			CheckedAt: now,
 			Status:    prx.Status,
 		}
 		prx.History = append(prx.History, record)
 		if len(prx.History) > 100 {
-			prx.History = prx.History[1:] // keep last 100
+			prx.History = prx.History[1:] 
 		}
 
 		if prx.Status == StatusDown {

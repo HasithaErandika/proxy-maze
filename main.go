@@ -19,35 +19,26 @@ import (
 )
 
 func main() {
-	// Initialize core components
 	cfgStore := config.NewStore()
 	pool := proxy.NewPool()
 	whRegistry := webhook.NewRegistry()
 	igRegistry := integration.NewRegistry()
 	
-	// Pre-create metrics struct
 	metricsTracker := metrics.NewMetrics(pool, nil)
 
-	// Webhook dispatcher needs metrics tracking
 	dispatcher := webhook.NewDispatcher(whRegistry, metricsTracker)
 
-	// Add integrations to dispatcher via wrapping to avoid circular dependencies
-	// Actually, wait, let's inject integration registry into alert manager or just use a wrapper.
-	// For simplicity, we just inject dispatcher into alert manager, and we will update manager to also trigger integrations.
 	alertManager := alert.NewManager(dispatcher)
-	alertManager.SetIntegrationRegistry(igRegistry) // We'll add this method to alertManager
+	alertManager.SetIntegrationRegistry(igRegistry) 
 	
-	// Complete metrics setup
 	metricsTracker = metrics.NewMetrics(pool, alertManager)
-	dispatcher.SetMetrics(metricsTracker) // update dispatcher with real metrics
+	dispatcher.SetMetrics(metricsTracker)
 
 	checker := proxy.NewChecker(pool, cfgStore, alertManager, metricsTracker)
 
-	// Context for graceful shutdown and background loop cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Link config store to checker loop
 	restartLoop := func() {
 		cancel()
 		ctx, cancel = context.WithCancel(context.Background())
@@ -55,10 +46,8 @@ func main() {
 	}
 	cfgStore.SetTickerCancel(restartLoop)
 
-	// Start background loop for the first time
 	go checker.Start(ctx)
 
-	// API Routing
 	mux := api.NewRouter(cfgStore, pool, alertManager, whRegistry, igRegistry, metricsTracker)
 
 	port := os.Getenv("PORT")
@@ -71,7 +60,6 @@ func main() {
 		Handler: mux,
 	}
 
-	// Graceful shutdown handling
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 

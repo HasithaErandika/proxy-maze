@@ -12,19 +12,16 @@ type ProxiesReq struct {
 	Replace bool     `json:"replace"`
 }
 
-// ProxiesHandler handles POST, GET, DELETE for /proxies
 func ProxiesHandler(pool *proxy.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
 			var req ProxiesReq
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				// Accept unknown fields silently, but check for valid JSON format
 			}
 
 			added := pool.Add(req.Proxies, req.Replace)
 
-			// The newly added proxies are returned as [{id, url, status:"pending"}]
 			respProxies := make([]map[string]string, 0, len(added))
 			for _, p := range added {
 				respProxies = append(respProxies, map[string]string{

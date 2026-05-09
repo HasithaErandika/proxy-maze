@@ -6,26 +6,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/HasithaErandika/proxy-maze/internal/webhook"
+	"github.com/google/uuid"
 )
 
-// Manager handles the state machine for proxy alerts.
 type Manager struct {
 	mu           sync.RWMutex
 	alerts       []*Alert
 	activeAlert  *Alert
 	dispatcher   *webhook.Dispatcher
-	igRegistry   IntegrationDispatcher // using interface to prevent cycle
+	igRegistry   IntegrationDispatcher 
 	Threshold    float64
 }
 
-// IntegrationDispatcher interface
 type IntegrationDispatcher interface {
 	DispatchAlert(event string, a *Alert, dispatcher *webhook.Dispatcher)
 }
 
-// NewManager creates a new alert manager.
 func NewManager(dispatcher *webhook.Dispatcher) *Manager {
 	return &Manager{
 		alerts:     make([]*Alert, 0),
@@ -34,14 +31,12 @@ func NewManager(dispatcher *webhook.Dispatcher) *Manager {
 	}
 }
 
-// SetIntegrationRegistry sets the integration registry to dispatch to Slack/Discord.
 func (m *Manager) SetIntegrationRegistry(ig IntegrationDispatcher) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.igRegistry = ig
 }
 
-// Evaluate checks the current pool state against the threshold and transitions the state machine.
 func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -54,7 +49,6 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 	isBreaching := failureRate >= m.Threshold
 
 	if isBreaching && m.activeAlert == nil {
-		// Fire new alert
 		idStr := strings.ReplaceAll(uuid.New().String(), "-", "")
 		if len(idStr) > 6 {
 			idStr = idStr[:6]
@@ -76,7 +70,6 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 		m.activeAlert = newAlert
 		m.alerts = append(m.alerts, newAlert)
 
-		// Dispatch async
 		if m.dispatcher != nil {
 			payload := map[string]interface{}{
 				"event":            "alert.fired",
@@ -96,14 +89,11 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 		}
 
 	} else if isBreaching && m.activeAlert != nil {
-		// Update active alert with latest stats (optional but keeps it consistent)
 		m.activeAlert.FailureRate = failureRate
 		m.activeAlert.TotalProxies = totalProxies
 		m.activeAlert.FailedProxies = failedProxies
 		m.activeAlert.FailedProxyIDs = failedProxyIDs
-		// Do not dispatch again
 	} else if !isBreaching && m.activeAlert != nil {
-		// Resolve alert
 		now := time.Now().UTC()
 		m.activeAlert.Status = StatusResolved
 		m.activeAlert.ResolvedAt = &now
@@ -115,7 +105,6 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 		resolvedAlert := m.activeAlert
 		m.activeAlert = nil
 
-		// Dispatch async
 		if m.dispatcher != nil {
 			resolvedAtStr := ""
 			if resolvedAlert.ResolvedAt != nil {
@@ -132,21 +121,17 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 			go m.igRegistry.DispatchAlert("alert.resolved", resolvedAlert, m.dispatcher)
 		}
 	}
-	// If !isBreaching && m.activeAlert == nil -> do nothing
 }
 
-// GetAll returns a copy of the alerts archive.
 func (m *Manager) GetAll() []*Alert {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Return a shallow copy of the slice to avoid concurrent modification panics
 	snapshot := make([]*Alert, len(m.alerts))
 	copy(snapshot, m.alerts)
 	return snapshot
 }
 
-// ActiveAlertCount returns the number of currently active alerts (0 or 1).
 func (m *Manager) ActiveAlertCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -156,7 +141,6 @@ func (m *Manager) ActiveAlertCount() int {
 	return 0
 }
 
-// TotalAlerts returns the total number of alerts in the archive.
 func (m *Manager) TotalAlerts() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

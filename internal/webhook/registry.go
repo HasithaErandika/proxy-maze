@@ -7,20 +7,17 @@ import (
 	"github.com/google/uuid"
 )
 
-// Registry manages registered webhooks.
 type Registry struct {
 	mu       sync.RWMutex
 	webhooks map[string]*Webhook
 }
 
-// NewRegistry creates a new webhook registry.
 func NewRegistry() *Registry {
 	return &Registry{
 		webhooks: make(map[string]*Webhook),
 	}
 }
 
-// Add registers a new webhook URL and returns its assigned ID.
 func (r *Registry) Add(url string) *Webhook {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -39,7 +36,6 @@ func (r *Registry) Add(url string) *Webhook {
 	return wh
 }
 
-// GetAll returns a list of all registered webhooks.
 func (r *Registry) GetAll() []*Webhook {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
