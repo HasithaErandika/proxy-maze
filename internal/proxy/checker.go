@@ -34,8 +34,10 @@ func NewChecker(pool *Pool, cfg *config.Store, alertM *alert.Manager, metrics Me
 
 func (c *Checker) Start(ctx context.Context) {
 	for {
-		intervalSecs, _ := c.config.Get()
+		intervalSecs, timeoutMs := c.config.Get()
 		interval := time.Duration(intervalSecs) * time.Second
+
+		c.client.Timeout = time.Duration(timeoutMs) * time.Millisecond
 
 		ticker := time.NewTicker(interval)
 
@@ -95,11 +97,7 @@ func (c *Checker) executeChecks(ctx context.Context) {
 
 	c.pool.mu.Lock()
 	for _, res := range results {
-		if _, exists := c.pool.proxies[res.prx.ID]; !exists {
-			continue
-		}
-
-		prx := c.pool.proxies[res.prx.ID] // Get the live pointer
+		prx := res.prx
 		status := res.status
 		now := res.now
 
@@ -144,22 +142,13 @@ func (c *Checker) executeChecks(ctx context.Context) {
 			failedIDs = append(failedIDs, prx.ID)
 		}
 	}
-	
-	totalProxies := len(c.pool.proxies)
-	if failedIDs == nil {
-		failedIDs = make([]string, 0) // Ensure valid JSON serialization
-	}
 	c.pool.mu.Unlock()
 
-	c.alertM.Evaluate(totalProxies, downCount, failedIDs)
+	c.alertM.Evaluate(len(proxies), downCount, failedIDs)
 }
 
 func (c *Checker) checkProxy(ctx context.Context, urlStr string) string {
-	_, timeoutMs := c.config.Get()
-	reqCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(reqCtx, "GET", urlStr, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
 	if err != nil {
 		return StatusDown
 	}
