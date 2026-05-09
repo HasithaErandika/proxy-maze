@@ -23,11 +23,21 @@ func IntegrationsHandler(registry *integration.Registry) http.HandlerFunc {
 			return
 		}
 
+		username := req.Username
+		if username == "" {
+			username = "ProxyWatch"
+		}
+
+		events := req.Events
+		if len(events) == 0 {
+			events = []string{"alert.fired", "alert.resolved"}
+		}
+
 		ig := integration.Integration{
 			Type:       req.Type,
 			WebhookURL: req.WebhookURL,
-			Username:   req.Username,
-			Events:     req.Events,
+			Username:   username,
+			Events:     events,
 		}
 
 		registry.Add(ig)

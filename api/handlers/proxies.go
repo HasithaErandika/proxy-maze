@@ -12,7 +12,7 @@ type ProxiesReq struct {
 	Replace bool     `json:"replace"`
 }
 
-func ProxiesHandler(pool *proxy.Pool) http.HandlerFunc {
+func ProxiesHandler(pool *proxy.Pool, checker *proxy.Checker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
@@ -37,6 +37,8 @@ func ProxiesHandler(pool *proxy.Pool) http.HandlerFunc {
 				"accepted": len(added),
 				"proxies":  respProxies,
 			})
+
+			checker.Trigger()
 
 		case http.MethodGet:
 			all := pool.GetAll()

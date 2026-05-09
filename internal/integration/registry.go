@@ -42,9 +42,9 @@ func (r *Registry) DispatchAlert(event string, a *alert.Alert, dispatcher *webho
 
 		switch ig.Type {
 		case "slack":
-			go sendSlack(ig, event, a)
+			go sendSlack(ig, event, a, dispatcher)
 		case "discord":
-			go sendDiscord(ig, event, a)
+			go sendDiscord(ig, event, a, dispatcher)
 		}
 	}
 }

@@ -3,8 +3,11 @@ package webhook
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -12,21 +15,39 @@ type MetricsTracker interface {
 	IncrementWebhookDeliveries()
 }
 
+type Job struct {
+	URL       string
+	Body      []byte
+	Key       string
+	CreatedAt time.Time
+	NextRun   time.Time
+	Attempts  int
+	InFlight  bool
+}
+
 type Dispatcher struct {
-	registry *Registry
-	client   *http.Client
-	metrics  MetricsTracker
+	registry    *Registry
+	client      *http.Client
+	metrics     MetricsTracker
+	mu          sync.Mutex
+	queue       map[string]*Job
+	successKeys map[string]struct{}
+	started     bool
 }
 
 func NewDispatcher(registry *Registry, metrics MetricsTracker) *Dispatcher {
 	return &Dispatcher{
-		registry: registry,
-		client:   &http.Client{},
-		metrics:  metrics,
+		registry:    registry,
+		client:      &http.Client{},
+		metrics:     metrics,
+		queue:       make(map[string]*Job),
+		successKeys: make(map[string]struct{}),
 	}
 }
 
 func (d *Dispatcher) SetMetrics(metrics MetricsTracker) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.metrics = metrics
 }
 
@@ -46,58 +67,152 @@ func (d *Dispatcher) dispatchAll(payload interface{}) {
 
 	webhooks := d.registry.GetAll()
 	for _, wh := range webhooks {
-		go d.deliverWithRetry(wh.URL, body)
+		d.EnqueueDelivery(wh.URL, body)
 	}
 }
 
-func (d *Dispatcher) deliverWithRetry(url string, body []byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
-	defer cancel()
+func computeDeliveryKey(url string, payload []byte) string {
+	var p map[string]interface{}
+	json.Unmarshal(payload, &p)
+	
+	event := ""
+	if e, ok := p["event"].(string); ok {
+		event = e
+	}
+	
+	alertId := ""
+	if a, ok := p["alert_id"].(string); ok {
+		alertId = a
+	}
 
-	success := DeliverWithRetry(ctx, d.client, url, body)
-	if success && d.metrics != nil {
-		d.metrics.IncrementWebhookDeliveries()
+	if alertId == "" {
+		hash := sha1.Sum(payload)
+		alertId = fmt.Sprintf("%x", hash)
+	}
+	return fmt.Sprintf("%s|%s|%s", url, event, alertId)
+}
+
+func (d *Dispatcher) EnqueueDelivery(url string, body []byte) {
+	key := computeDeliveryKey(url, body)
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if _, ok := d.successKeys[key]; ok {
+		return
+	}
+	if _, ok := d.queue[key]; ok {
+		return
+	}
+
+	d.queue[key] = &Job{
+		URL:       url,
+		Body:      body,
+		Key:       key,
+		CreatedAt: time.Now(),
+		NextRun:   time.Now(),
+	}
+
+	if !d.started {
+		d.started = true
+		go d.processLoop()
 	}
 }
 
-func DeliverWithRetry(ctx context.Context, client *http.Client, url string, body []byte) bool {
-	backoff := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second}
-	maxRetries := len(backoff)
+func (d *Dispatcher) processLoop() {
+	ticker := time.NewTicker(250 * time.Millisecond)
+	for range ticker.C {
+		d.mu.Lock()
 
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-time.After(backoff[attempt-1]):
-			case <-ctx.Done():
-				return false
+		now := time.Now()
+		var pending []*Job
+		for key, job := range d.queue {
+			if job.InFlight {
+				continue
+			}
+			if now.Before(job.NextRun) {
+				continue
+			}
+			if time.Since(job.CreatedAt) > 60*time.Second {
+				delete(d.queue, key)
+				continue
+			}
+
+			pending = append(pending, job)
+			if len(pending) >= 25 {
+				break
 			}
 		}
 
-		reqCtx, reqCancel := context.WithTimeout(ctx, 5*time.Second)
-		req, err := http.NewRequestWithContext(reqCtx, "POST", url, bytes.NewReader(body))
-		if err != nil {
-			reqCancel()
-			continue
+		for _, job := range pending {
+			job.InFlight = true
 		}
-		req.Header.Set("Content-Type", "application/json")
+		d.mu.Unlock()
 
-		resp, err := client.Do(req)
-		if err != nil {
-			reqCancel()
-			continue
-		}
-		
-		status := resp.StatusCode
-		resp.Body.Close()
-		reqCancel()
-
-		if status >= 200 && status < 300 {
-			return true
-		} else if status == 500 || status == 502 || status == 503 || status == 504 {
-			continue
-		} else {
-			return false
+		for _, job := range pending {
+			go d.attemptJob(job)
 		}
 	}
-	return false
+}
+
+func (d *Dispatcher) attemptJob(job *Job) {
+	reqCtx, reqCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	req, err := http.NewRequestWithContext(reqCtx, "POST", job.URL, bytes.NewReader(job.Body))
+	if err != nil {
+		reqCancel()
+		d.requeue(job, false)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := d.client.Do(req)
+	if err != nil {
+		reqCancel()
+		d.requeue(job, true)
+		return
+	}
+
+	status := resp.StatusCode
+	resp.Body.Close()
+	reqCancel()
+
+	if status >= 200 && status < 300 {
+		d.markSuccess(job)
+	} else if status >= 500 && status < 600 {
+		d.requeue(job, true)
+	} else {
+		d.requeue(job, false)
+	}
+}
+
+func (d *Dispatcher) requeue(job *Job, transient bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if !transient {
+		delete(d.queue, job.Key)
+		return
+	}
+
+	j, ok := d.queue[job.Key]
+	if !ok {
+		return
+	}
+
+	j.Attempts++
+	j.NextRun = time.Now().Add(1500 * time.Millisecond)
+	j.InFlight = false
+}
+
+func (d *Dispatcher) markSuccess(job *Job) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if _, ok := d.successKeys[job.Key]; !ok {
+		d.successKeys[job.Key] = struct{}{}
+		if d.metrics != nil {
+			d.metrics.IncrementWebhookDeliveries()
+		}
+	}
+	delete(d.queue, job.Key)
 }
