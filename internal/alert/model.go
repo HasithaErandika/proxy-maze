@@ -19,18 +19,3 @@ type Alert struct {
 	ResolvedAt     *time.Time `json:"resolved_at"`
 	Message        string     `json:"message"`
 }
-
-func (a *Alert) Clone() *Alert {
-	clone := *a
-	if a.FailedProxyIDs != nil {
-		clone.FailedProxyIDs = make([]string, len(a.FailedProxyIDs))
-		copy(clone.FailedProxyIDs, a.FailedProxyIDs)
-	} else {
-		clone.FailedProxyIDs = make([]string, 0)
-	}
-	if a.ResolvedAt != nil {
-		t := *a.ResolvedAt
-		clone.ResolvedAt = &t
-	}
-	return &clone
-}
