@@ -39,12 +39,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	restartLoop := func() {
-		cancel()
-		ctx, cancel = context.WithCancel(context.Background())
-		go checker.Start(ctx)
-	}
-	cfgStore.SetTickerCancel(restartLoop)
 
 	go checker.Start(ctx)
 

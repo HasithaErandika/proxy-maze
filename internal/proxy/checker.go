@@ -33,25 +33,9 @@ func NewChecker(pool *Pool, cfg *config.Store, alertM *alert.Manager, metrics Me
 }
 
 func (c *Checker) Start(ctx context.Context) {
-	for {
-		intervalSecs, timeoutMs := c.config.Get()
-		interval := time.Duration(intervalSecs) * time.Second
-
-		c.client.Timeout = time.Duration(timeoutMs) * time.Millisecond
-
-		ticker := time.NewTicker(interval)
-
-		select {
-		case <-ctx.Done():
-			ticker.Stop()
-			return
-		default:
-			c.runLoop(ctx, ticker)
-		}
-	}
-}
-
-func (c *Checker) runLoop(ctx context.Context, ticker *time.Ticker) {
+	intervalSecs, _ := c.config.Get()
+	interval := time.Duration(intervalSecs) * time.Second
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -60,6 +44,13 @@ func (c *Checker) runLoop(ctx context.Context, ticker *time.Ticker) {
 			return
 		case <-ticker.C:
 			c.executeChecks(ctx)
+
+			newIntervalSecs, _ := c.config.Get()
+			newInterval := time.Duration(newIntervalSecs) * time.Second
+			if newInterval != interval {
+				interval = newInterval
+				ticker.Reset(interval)
+			}
 		}
 	}
 }
@@ -69,6 +60,9 @@ func (c *Checker) executeChecks(ctx context.Context) {
 	if len(proxies) == 0 {
 		return 
 	}
+
+	_, timeoutMs := c.config.Get()
+	timeout := time.Duration(timeoutMs) * time.Millisecond
 
 	type result struct {
 		prx    *Proxy
@@ -82,7 +76,9 @@ func (c *Checker) executeChecks(ctx context.Context) {
 		wg.Add(1)
 		go func(i int, p *Proxy) {
 			defer wg.Done()
-			status := c.checkProxy(ctx, p.URL)
+			reqCtx, reqCancel := context.WithTimeout(ctx, timeout)
+			defer reqCancel()
+			status := c.checkProxy(reqCtx, p.URL)
 			results[i] = result{p, status, time.Now().UTC()}
 		}(i, prx)
 	}
@@ -97,6 +93,9 @@ func (c *Checker) executeChecks(ctx context.Context) {
 
 	c.pool.mu.Lock()
 	for _, res := range results {
+		if _, exists := c.pool.proxies[res.prx.ID]; !exists {
+			continue
+		}
 		prx := res.prx
 		status := res.status
 		now := res.now
@@ -142,9 +141,10 @@ func (c *Checker) executeChecks(ctx context.Context) {
 			failedIDs = append(failedIDs, prx.ID)
 		}
 	}
+	currentSize := len(c.pool.proxies)
 	c.pool.mu.Unlock()
 
-	c.alertM.Evaluate(len(proxies), downCount, failedIDs)
+	c.alertM.Evaluate(currentSize, downCount, failedIDs)
 }
 
 func (c *Checker) checkProxy(ctx context.Context, urlStr string) string {

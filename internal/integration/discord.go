@@ -80,6 +80,6 @@ func sendDiscord(ig Integration, event string, a *alert.Alert) {
 	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
 	defer cancel()
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{}
 	webhook.DeliverWithRetry(ctx, client, ig.WebhookURL, body)
 }
