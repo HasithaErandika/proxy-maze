@@ -59,13 +59,19 @@ func (m *Manager) Evaluate(totalProxies, failedProxies int, failedProxyIDs []str
 		}
 		alertID := "alert-" + idStr
 
+		failedIDsCopy := make([]string, len(failedProxyIDs))
+		copy(failedIDsCopy, failedProxyIDs)
+		if len(failedIDsCopy) == 0 {
+			failedIDsCopy = make([]string, 0)
+		}
+
 		newAlert := &Alert{
 			AlertID:        alertID,
 			Status:         StatusActive,
 			FailureRate:    failureRate,
 			TotalProxies:   totalProxies,
 			FailedProxies:  failedProxies,
-			FailedProxyIDs: failedProxyIDs,
+			FailedProxyIDs: failedIDsCopy,
 			Threshold:      m.Threshold,
 			FiredAt:        time.Now().UTC(),
 			Message:        fmt.Sprintf("Proxy pool failure rate exceeded threshold (%.2f%%)", failureRate*100),
@@ -132,7 +138,9 @@ func (m *Manager) GetAll() []*Alert {
 	defer m.mu.RUnlock()
 
 	snapshot := make([]*Alert, len(m.alerts))
-	copy(snapshot, m.alerts)
+	for i, a := range m.alerts {
+		snapshot[i] = a.Clone()
+	}
 	return snapshot
 }
 
