@@ -21,10 +21,8 @@ type Dispatcher struct {
 func NewDispatcher(registry *Registry, metrics MetricsTracker) *Dispatcher {
 	return &Dispatcher{
 		registry: registry,
-		client: &http.Client{
-			Timeout: 5 * time.Second,
-		},
-		metrics: metrics,
+		client:   &http.Client{},
+		metrics:  metrics,
 	}
 }
 
@@ -75,19 +73,23 @@ func DeliverWithRetry(ctx context.Context, client *http.Client, url string, body
 			}
 		}
 
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+		reqCtx, reqCancel := context.WithTimeout(ctx, 5*time.Second)
+		req, err := http.NewRequestWithContext(reqCtx, "POST", url, bytes.NewReader(body))
 		if err != nil {
+			reqCancel()
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.Do(req)
 		if err != nil {
+			reqCancel()
 			continue
 		}
 		
 		status := resp.StatusCode
 		resp.Body.Close()
+		reqCancel()
 
 		if status >= 200 && status < 300 {
 			return true
