@@ -19,12 +19,13 @@ func NewRouter(
 	whRegistry *webhook.Registry,
 	igRegistry *integration.Registry,
 	metricsTracker *metrics.Metrics,
+	checker *proxy.Checker,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", handlers.HealthHandler)
 	mux.HandleFunc("/config", handlers.ConfigHandler(cfgStore))
-	mux.HandleFunc("/proxies", handlers.ProxiesHandler(pool))
+	mux.HandleFunc("/proxies", handlers.ProxiesHandler(pool, checker))
 	mux.HandleFunc("/proxies/", handlers.ProxyHandler(pool))
 	mux.HandleFunc("/alerts", handlers.AlertsHandler(alertManager))
 	mux.HandleFunc("/webhooks", handlers.WebhooksHandler(whRegistry))

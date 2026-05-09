@@ -20,6 +20,7 @@ type Checker struct {
 	alertM  *alert.Manager
 	metrics MetricsTracker
 	client  *http.Client
+	trigger chan struct{}
 }
 
 func NewChecker(pool *Pool, cfg *config.Store, alertM *alert.Manager, metrics MetricsTracker) *Checker {
@@ -29,6 +30,14 @@ func NewChecker(pool *Pool, cfg *config.Store, alertM *alert.Manager, metrics Me
 		alertM:  alertM,
 		metrics: metrics,
 		client:  &http.Client{},
+		trigger: make(chan struct{}, 1),
+	}
+}
+
+func (c *Checker) Trigger() {
+	select {
+	case c.trigger <- struct{}{}:
+	default:
 	}
 }
 
@@ -42,6 +51,8 @@ func (c *Checker) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-c.trigger:
+			c.executeChecks(ctx)
 		case <-ticker.C:
 			c.executeChecks(ctx)
 

@@ -1,12 +1,9 @@
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
-	"time"
 
 	"github.com/HasithaErandika/proxy-maze/internal/alert"
 	"github.com/HasithaErandika/proxy-maze/internal/webhook"
@@ -35,7 +32,7 @@ type discordPayload struct {
 	Embeds   []discordEmbed `json:"embeds"`
 }
 
-func sendDiscord(ig Integration, event string, a *alert.Alert) {
+func sendDiscord(ig Integration, event string, a *alert.Alert, dispatcher *webhook.Dispatcher) {
 	color := 16711680 
 	title := "Proxy Pool Alert Fired"
 	desc := "Proxy pool failure rate has exceeded the threshold."
@@ -77,9 +74,5 @@ func sendDiscord(ig Integration, event string, a *alert.Alert) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
-	defer cancel()
-
-	client := &http.Client{}
-	webhook.DeliverWithRetry(ctx, client, ig.WebhookURL, body)
+	dispatcher.EnqueueDelivery(ig.WebhookURL, body)
 }

@@ -42,7 +42,7 @@ func main() {
 
 	go checker.Start(ctx)
 
-	mux := api.NewRouter(cfgStore, pool, alertManager, whRegistry, igRegistry, metricsTracker)
+	mux := api.NewRouter(cfgStore, pool, alertManager, whRegistry, igRegistry, metricsTracker, checker)
 
 	port := os.Getenv("PORT")
 	if port == "" {
